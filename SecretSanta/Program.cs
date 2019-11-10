@@ -46,8 +46,6 @@ namespace SecretSanta
 
       services.AddSingleton(typeof(IEmailSender), typeof(EmailSender.EmailSender));
 
-      //services.AddTransient<ITestService, TestService>();
-      // IMPORTANT! Register our application entry point
       services.AddTransient<SecretSantaApplication>();
       return services;
     }

@@ -21,6 +21,7 @@ namespace SecretSanta
   {
     public string Name { get; set; }
     public string Email { get; set; }
+    public string Partner { get; set; }
   }
 
   public class AppConfig

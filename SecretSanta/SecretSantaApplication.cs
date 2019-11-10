@@ -92,7 +92,7 @@ namespace SecretSanta
             foreach (var result in drawResults)
             {
               var sent = emailSender.SendEmail(result.Person.Email,
-                $"Hi, {result.Person.Name},\n\rYou have been assigned {result.AssignedTo} in the Secret Santa draw.");
+                $"Hi, {result.Person.Name},\n\rYou have been assigned {result.AssignedTo} in round 2 of the Secret Santa draw.");
 
               if (!sent)
               {
@@ -137,7 +137,7 @@ namespace SecretSanta
         {
           var pickIndex = new Random().Next(0, remainingInPool.Count);
           var pick = remainingInPool[pickIndex];
-          if (pick != res.Person.Name)
+          if (pick != res.Person.Name && pick != res.Person.Partner)
           {
             picked = true;
             res.AssignedTo = pick;
