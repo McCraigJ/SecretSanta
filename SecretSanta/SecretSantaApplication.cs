@@ -9,11 +9,9 @@ namespace SecretSanta
   public enum AppPhase
   {
     DrawNotStarted = 1,
-    DrawCompleted = 2,
-    DrawCompletedWithConflicts = 3,
-    EmailSending = 4,
-    Complete = 5,
-    ConfigurationError = 6
+    EmailSending = 2,
+    Complete = 3,
+    ConfigurationError = 4
   }
 
   public class SecretSantaApplication
@@ -21,6 +19,8 @@ namespace SecretSanta
     private readonly AppConfig appConfig;
     private readonly IEmailSender emailSender;
     private AppPhase phase;
+
+    private List<DrawResult> drawResults;
 
     public SecretSantaApplication(AppConfig appConfig, IEmailSender emailSender)
     {
@@ -37,7 +37,7 @@ namespace SecretSanta
     {
 
       InitialiseApplication();
-      
+
 
       Console.WriteLine("Welcome to Secret Santa. Would you like to draw?");
 
@@ -48,38 +48,76 @@ namespace SecretSanta
           case AppPhase.DrawNotStarted:
             Console.WriteLine("Press 'd' to draw, 'b' to test the assignments or 't' to send a test email");
             var input = GetKeyInput(new char[] { 'd', 't', 'b' });
-            switch(input)
+            switch (input)
             {
               case 'd':
-                DoDraw(false);
-                break;
-
               case 'b':
-                DoDraw(true);
+                var debug = input == 'b';
+                var success = false;
+                var attempts = 0;
+                var maxAttempts = 10;
+                while (!success && attempts < maxAttempts)
+                {
+                  success = DoDraw(debug);
+                  attempts++;
+                }
+                if (success)
+                {
+                  phase = debug ? AppPhase.DrawNotStarted : AppPhase.EmailSending;
+                }
+                else
+                {
+                  Console.WriteLine("Failed to pick Secret Santa recipients");
+                }
+
                 break;
 
               case 't':
                 Console.WriteLine("Sending test email");
-                var sent = emailSender.SendEmail(appConfig.Smtp.TestEmail, "This is a test email from Secret Santa");
+                var sent = emailSender.SendEmail(appConfig.Smtp.TestEmail, "This is a test email from\n\r Secret Santa");
                 if (sent)
                 {
                   Console.WriteLine("Test Email sent");
-                } else { 
+                }
+                else
+                {
                   phase = AppPhase.ConfigurationError;
                 }
                 break;
             }
-            
+
+            break;
+
+          case AppPhase.EmailSending:
+            foreach (var result in drawResults)
+            {
+              var sent = emailSender.SendEmail(result.Person.Email,
+                $"Hi, {result.Person.Name},\n\rYou have been assigned {result.AssignedTo} in the Secret Santa draw.");
+
+              if (!sent)
+              {
+                phase = AppPhase.ConfigurationError;
+                break;
+              }
+            }
+            if (phase != AppPhase.ConfigurationError)
+            {
+              phase = AppPhase.Complete;
+            }
             break;
         }
       }
-      
+
+      Console.WriteLine("Complete: Press any key to quit");
+      Console.ReadKey();
+
     }
 
-    private void DoDraw(bool debug)
+    private bool DoDraw(bool debug)
     {
-      List<DrawResult> drawResults = new List<DrawResult>();
+      drawResults = new List<DrawResult>();
       var remainingInPool = new List<string>();
+
       foreach (var p in appConfig.People)
       {
         remainingInPool.Add(p.Name);
@@ -91,20 +129,51 @@ namespace SecretSanta
 
       foreach (var res in drawResults)
       {
-        var random = new Random().Next(0, remainingInPool.Count);
-        res.AssignedTo = remainingInPool[random];
-        remainingInPool.RemoveAt(random);
+
+        var picked = false;
+        var attempts = 0;
+        var maxAttempts = appConfig.People.Count();
+        while (!picked && attempts < maxAttempts)
+        {
+          var pickIndex = new Random().Next(0, remainingInPool.Count);
+          var pick = remainingInPool[pickIndex];
+          if (pick != res.Person.Name)
+          {
+            picked = true;
+            res.AssignedTo = pick;
+            remainingInPool.RemoveAt(pickIndex);
+          }
+          attempts++;
+        }
+
+        if (picked == false)
+        {
+          //if (debug)
+          //{
+          //  Console.WriteLine("Failed to pick results");
+          //  DebugPrintResults(drawResults);
+          //}
+          return false;
+        }
+
       }
-      
+
+      if (debug)
+      {
+        Console.WriteLine("Successfully picked results");
+        DebugPrintResults(drawResults);
+      }
+
+      return true;
+
+    }
+
+    private void DebugPrintResults(List<DrawResult> drawResults)
+    {
       foreach (var res in drawResults)
       {
-        if (debug)
-        {
-          Console.WriteLine($"{res.Person.Name} has picked {res.AssignedTo}");
-
-        }
+        Console.WriteLine($"{res.Person.Name} has picked {res.AssignedTo}");
       }
-
     }
 
     private char GetKeyInput(char[] allowedCharacters)
@@ -118,7 +187,9 @@ namespace SecretSanta
         if (allowedCharacters.Contains(key))
         {
           keyAccepted = true;
-        } else { 
+        }
+        else
+        {
           Console.WriteLine("Character invalid. Please try again");
         }
       }
